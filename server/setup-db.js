@@ -47,7 +47,7 @@ async function setupDatabase() {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE perfis_financeiros (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE,
+          usuario_id UUID UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
           objetivo_principal VARCHAR(100),
           perfil_consumidor VARCHAR(100),
           dependentes INT DEFAULT 0,

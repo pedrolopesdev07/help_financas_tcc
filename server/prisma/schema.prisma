@@ -13,11 +13,15 @@ model usuarios {
   email                 String              @unique
   senha_hash            String
   renda_mensal          Decimal?
-  estrategia_financeira String              @default("50-30-20")
+  // 1. Removemos o @default daqui para o fluxo do onboarding fazer sentido
+  estrategia_financeira String?             
   onboarding_concluido  Boolean             @default(false)
   criado_em             DateTime            @default(now())
   atualizado_em         DateTime            @updatedAt
-  perfis_financeiros    perfis_financeiros[]
+  
+  // 2. CORREÇÃO: Mudado de perfis_financeiros[] para apenas o objeto opcional (Relacionamento 1:1)
+  perfil_financeiro     perfis_financeiros? 
+  
   categorias            categorias[]
   transacoes            transacoes[]
   metas                 metas[]
@@ -26,14 +30,14 @@ model usuarios {
 }
 
 model perfis_financeiros {
-  id                String   @id @default(uuid())
-  usuario_id        String   @unique
+  id                 String   @id @default(uuid())
+  usuario_id         String   @unique
   objetivo_principal String
-  perfil_consumidor String
-  dependentes       Int
-  config_estrategia Json?
-  criado_em         DateTime @default(now())
-  usuario           usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  perfil_consumidor  String
+  dependentes        Int
+  config_estrategia  Json?
+  criado_em          DateTime @default(now())
+  usuario            usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 }
 
 model categorias {

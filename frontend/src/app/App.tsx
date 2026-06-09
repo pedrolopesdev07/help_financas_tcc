@@ -22,14 +22,28 @@ const defaultUserData: OnboardingData = {
   strategy: "50-30-20",
 };
 
+const CATEGORY_NAME_TO_ALIAS: Record<string, string> = {
+  "Alimentação": "alimentacao",
+  "Moradia": "moradia",
+  "Transporte": "transporte",
+  "Lazer": "lazer",
+  "Compras": "compras",
+  "Energia/Água": "energia",
+  "Celular/Internet": "celular",
+  "Salário": "salario",
+  "Freelance": "freelance",
+  "Investimento": "investimento",
+  "Outros": "outros",
+};
+
 const mapTransaction = (item: any): Transaction => ({
   id: item.id,
   type: item.tipo,
   amount: Number(item.valor),
-  category: item.categoria?.nome ?? "Outros",
+  category: CATEGORY_NAME_TO_ALIAS[item.categoria?.nome] ?? item.categoria?.nome ?? "outros",
   description: item.descricao ?? "",
   date: new Date(item.data).toISOString().split("T")[0],
-  recurrence: item.recorrencia as Transaction["recurrence"]
+  recurrence: item.recorrencia === "nenhuma" ? "unica" : item.recorrencia as Transaction["recurrence"]
 });
 
 const mapGoal = (item: any): Goal => ({
@@ -82,12 +96,25 @@ export default function App() {
     setLoading(true);
     try {
       const me = await api.getMe();
+      const reverseGoalLabelMap: Record<string, string> = {
+        "Quitar Dívidas": "debts",
+        "Reserva de Emergência": "reserve",
+        "Investimento": "invest",
+        "Objetivo Pessoal": "goals",
+      };
+
+      const reverseProfileLabelMap: Record<string, string> = {
+        "Gasto mais do que ganho": "overspend",
+        "Sou equilibrado": "balanced",
+        "Poupo regularmente": "saver",
+      };
+
       setUserData({
         name: me.nome || "",
         income: me.renda_mensal ? `R$ ${Number(me.renda_mensal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "",
-        goal: "reserve",
-        profile: "balanced",
-        strategy: me.estrategia_financeira || "50-30-20",
+        goal: reverseGoalLabelMap[me.perfis_financeiros?.objetivo_principal ?? ""] ?? "reserve",
+        profile: reverseProfileLabelMap[me.perfis_financeiros?.perfil_consumidor ?? ""] ?? "balanced",
+        strategy: me.perfis_financeiros?.config_estrategia?.strategy || me.estrategia_financeira || "50-30-20",
       });
       setAppState(me.onboarding_concluido ? "app" : "onboarding");
       await Promise.all([loadTransactions(), loadGoals()]);
@@ -168,7 +195,7 @@ export default function App() {
         valor: transaction.amount,
         descricao: transaction.description,
         data: transaction.date,
-        categoria_id: null,
+        categoria_key: transaction.category,
         recorrencia: transaction.recurrence,
       });
       const created = mapTransaction(response.transacao ?? response);

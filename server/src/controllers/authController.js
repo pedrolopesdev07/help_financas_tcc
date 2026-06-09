@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import prisma from '../models/prismaClient.js';
+import { isLoginBlocked, recordLoginAttempt } from '../middlewares/rateLimiter.js';
 
 dotenv.config();
 
@@ -67,14 +68,18 @@ export async function login(req, res) {
   }
 
   const user = await prisma.usuarios.findUnique({ where: { email } });
-  if (!user) {
+  const passwordMatches = user ? await bcrypt.compare(senha, user.senha_hash) : false;
+
+  if (isLoginBlocked(req) && !passwordMatches) {
+    return res.status(429).json({ error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' });
+  }
+
+  if (!user || !passwordMatches) {
+    recordLoginAttempt(req, false);
     return res.status(401).json({ error: 'Credenciais inválidas.' });
   }
 
-  const passwordMatches = await bcrypt.compare(senha, user.senha_hash);
-  if (!passwordMatches) {
-    return res.status(401).json({ error: 'Credenciais inválidas.' });
-  }
+  recordLoginAttempt(req, true);
 
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);

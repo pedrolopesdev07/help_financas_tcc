@@ -23,6 +23,17 @@ const categoryIcons: Record<string, React.ReactNode> = {
   outros: <Wallet size={16} />,
 };
 
+const categoryLabels: Record<string, string> = {
+  alimentacao: "Alimentação",
+  moradia: "Moradia",
+  transporte: "Transporte",
+  lazer: "Lazer",
+  compras: "Compras",
+  energia: "Energia/Água",
+  celular: "Celular/Internet",
+  outros: "Outros",
+};
+
 const categoryColors: Record<string, string> = {
   alimentacao: "#1a7f5a",
   moradia: "#7c3aed",
@@ -93,8 +104,35 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
   const catSpend = monthTransactions
     .filter(t => t.type === "despesa")
     .reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>);
-  const pieData = Object.entries(catSpend).map(([name, value]) => ({ name, value }));
+  const pieData = Object.entries(catSpend).map(([id, value]) => ({ id, name: categoryLabels[id] ?? id, value }));
 
+  const strategyConfig: Record<string, { title: string; subtitle: string; items: Array<{ label: string; pct: string; spent: number; limit: number; color: string }> }> = {
+    "50-30-20": {
+      title: "Estratégia 50-30-20",
+      subtitle: "Baseado na renda de",
+      items: [
+        { label: "Essenciais", pct: "50%", spent: essentialSpent, limit: essential, color: "bg-primary" },
+        { label: "Desejos", pct: "30%", spent: desireSpent, limit: desire, color: "bg-accent" },
+        { label: "Prioridades", pct: "20%", spent: prioritySpent, limit: priority, color: "bg-blue-500" },
+      ],
+    },
+    "80-20": {
+      title: "Estratégia 80-20",
+      subtitle: "Baseado na renda de",
+      items: [
+        { label: "Gastos", pct: "80%", spent: totalExpenses, limit: incomeValue * 0.8, color: "bg-accent" },
+        { label: "Poupança", pct: "20%", spent: Math.max(0, totalIncome - totalExpenses), limit: incomeValue * 0.2, color: "bg-blue-500" },
+      ],
+    },
+    zero: {
+      title: "Orçamento Base Zero",
+      subtitle: "Baseado na renda de",
+      items: [
+        { label: "Planejamento", pct: "100%", spent: totalExpenses, limit: incomeValue, color: "bg-primary" },
+      ],
+    },
+  };
+  const strategy = strategyConfig[userData.strategy] ?? strategyConfig["50-30-20"];
   const health = getHealthStatus(balance, incomeValue);
   const recent = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
 
@@ -105,6 +143,10 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
     { condition: true, msg: "Dica: Anote cada gasto assim que acontecer. Pequenos hábitos fazem grande diferença!" },
   ];
   const activeTip = tips.find(t => t.condition)!;
+
+  const strategyLabel = userData.strategy || "50-30-20";
+  const balanceColor = balance >= 0 ? "text-emerald-500" : "text-red-500";
+  const balanceBg = balance >= 0 ? "bg-emerald-100" : "bg-red-100";
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -126,13 +168,13 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
 
       {/* Balance cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="sm:col-span-1 bg-primary rounded-2xl p-5 text-white">
+        <div className={`sm:col-span-1 rounded-2xl p-5 ${balanceBg} border ${balance >= 0 ? "border-emerald-200" : "border-red-200"}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-white/70 font-medium">Saldo Atual</span>
+            <span className="text-sm text-foreground font-medium">Saldo Atual</span>
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${health.bg} ${health.color}`}>{health.label}</span>
           </div>
-          <div className="text-2xl font-bold mb-1">{formatBRL(balance)}</div>
-          <div className="text-xs text-white/60">Receitas − Despesas do mês</div>
+          <div className={`text-2xl font-bold mb-1 ${balanceColor}`}>{formatBRL(balance)}</div>
+          <div className="text-xs text-muted-foreground">Receitas − Despesas do mês</div>
         </div>
 
         <div className="bg-card rounded-2xl p-5 border border-border">
@@ -162,21 +204,17 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
       <div className="bg-card rounded-2xl p-5 border border-border mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-foreground">Estratégia 50-30-20</h3>
-            <p className="text-xs text-muted-foreground">Baseado na renda de {formatBRL(incomeValue)}</p>
+            <h3 className="font-semibold text-foreground">{strategy.title}</h3>
+            <p className="text-xs text-muted-foreground">{strategy.subtitle} {formatBRL(incomeValue)}</p>
           </div>
         </div>
 
         <div className="space-y-4">
-          {[
-            { label: "Essenciais", pct: "50%", spent: essentialSpent, limit: essential, color: "bg-primary" },
-            { label: "Desejos", pct: "30%", spent: desireSpent, limit: desire, color: "bg-accent" },
-            { label: "Prioridades", pct: "20%", spent: prioritySpent, limit: priority, color: "bg-blue-500" },
-          ].map(item => {
+          {strategy.items.map(item => {
             const barPct = getBarWidth(item.spent, item.limit);
             const barColor = getBarColor(item.spent, item.limit);
-            const isOver = item.spent >= item.limit;
-            const isNear = item.spent / item.limit >= 0.8 && !isOver;
+            const isOver = item.limit > 0 && item.spent >= item.limit;
+            const isNear = item.limit > 0 && item.spent / item.limit >= 0.8 && !isOver;
             return (
               <div key={item.label}>
                 <div className="flex items-center justify-between mb-1.5">
@@ -204,13 +242,13 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name">
                   {pieData.map((entry) => (
-                    <Cell key={entry.name} fill={categoryColors[entry.name] || "#94a3b8"} />
+                    <Cell key={entry.id} fill={categoryColors[entry.id] || "#94a3b8"} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value: number) => formatBRL(value)} />
-                <Legend formatter={(value) => value.charAt(0).toUpperCase() + value.slice(1)} iconSize={10} iconType="circle" />
+                <Legend formatter={(value) => value} iconSize={10} iconType="circle" />
               </PieChart>
             </ResponsiveContainer>
           ) : (

@@ -69,7 +69,7 @@ export async function fetchTransactions() {
   return request('/api/transactions');
 }
 
-export async function createTransaction(payload: { tipo: string; valor: number; descricao: string; data: string; categoria_id?: string | null; recorrencia: string }) {
+export async function createTransaction(payload: { tipo: string; valor: number; descricao: string; data: string; categoria_id?: string | null; categoria_key?: string; recorrencia: string }) {
   return request('/api/transactions', { method: 'POST', body: payload });
 }
 
