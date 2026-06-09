@@ -35,6 +35,8 @@ const categories = [
   { id: "outros", label: "Outros", emoji: "📦" },
 ];
 
+const DESCRIPTION_MAX_LENGTH = 80;
+
 const defaultForm = (): Omit<Transaction, "id"> => ({
   type: "despesa",
   amount: 0,
@@ -65,6 +67,11 @@ export function Transactions({ transactions, onAdd, onDelete, initialOpenForm }:
     const cleaned = val.replace(/\D/g, "");
     setAmountStr(cleaned);
     setForm(f => ({ ...f, amount: parseInt(cleaned || "0") / 100 }));
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    const trimmed = value.slice(0, DESCRIPTION_MAX_LENGTH);
+    setForm(f => ({ ...f, description: trimmed }));
   };
 
   const formatAmountDisplay = (str: string) => {
@@ -286,9 +293,11 @@ export function Transactions({ transactions, onAdd, onDelete, initialOpenForm }:
                   type="text"
                   placeholder="Ex: Supermercado BH, Salário agosto..."
                   value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  onChange={e => handleDescriptionChange(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl bg-input-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
+                <p className="mt-2 text-[11px] text-muted-foreground">{form.description.length}/{DESCRIPTION_MAX_LENGTH} caracteres</p>
               </div>
 
               {/* Recurrence */}

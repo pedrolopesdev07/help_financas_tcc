@@ -242,13 +242,34 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name">
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  stroke="var(--card)"
+                  strokeWidth={2}
+                >
                   {pieData.map((entry) => (
                     <Cell key={entry.id} fill={categoryColors[entry.id] || "#94a3b8"} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatBRL(value)} />
-                <Legend formatter={(value) => value} iconSize={10} iconType="circle" />
+                <Tooltip
+                  formatter={(value: number) => formatBRL(value)}
+                  contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                  itemStyle={{ color: "var(--foreground)" }}
+                  cursor={{ fill: "rgba(0,0,0,0.05)" }}
+                />
+                <Legend
+                  formatter={(value) => value}
+                  iconSize={10}
+                  iconType="circle"
+                  wrapperStyle={{ color: "var(--foreground)", marginTop: 8 }}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
