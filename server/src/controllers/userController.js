@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import prisma from '../models/prismaClient.js';
 
 export async function getMe(req, res) {
@@ -15,13 +16,19 @@ export async function getMe(req, res) {
 }
 
 export async function updateMe(req, res) {
-  const { nome, email, renda_mensal, estrategia_financeira } = req.body;
+  const { nome, email, senha, renda_mensal, estrategia_financeira } = req.body;
   const updates = {};
 
   if (nome) updates.nome = nome;
   if (email) updates.email = email;
   if (renda_mensal !== undefined) updates.renda_mensal = Number(renda_mensal);
   if (estrategia_financeira) updates.estrategia_financeira = estrategia_financeira;
+  if (senha) {
+    if (senha.length < 6) {
+      return res.status(400).json({ error: 'A senha precisa ter pelo menos 6 caracteres.' });
+    }
+    updates.senha_hash = await bcrypt.hash(senha, 10);
+  }
 
   if (email) {
     const existing = await prisma.usuarios.findUnique({ where: { email } });

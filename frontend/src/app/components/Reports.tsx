@@ -1,4 +1,4 @@
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatBRL } from "./ui/formatters";
 import type { Transaction } from "./Transactions";
@@ -8,6 +8,28 @@ interface ReportsProps {
 }
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+const categoryLabels: Record<string, string> = {
+  alimentacao: "Alimentação",
+  moradia: "Moradia",
+  transporte: "Transporte",
+  lazer: "Lazer",
+  compras: "Compras",
+  energia: "Energia/Água",
+  celular: "Celular/Internet",
+  outros: "Outros",
+};
+
+const categoryColors: Record<string, string> = {
+  alimentacao: "#1a7f5a",
+  moradia: "#7c3aed",
+  transporte: "#f59e0b",
+  lazer: "#3b82f6",
+  compras: "#ec4899",
+  energia: "#14b8a6",
+  celular: "#f97316",
+  outros: "#94a3b8",
+};
 
 export function Reports({ transactions }: ReportsProps) {
   const now = new Date();
@@ -31,6 +53,21 @@ export function Reports({ transactions }: ReportsProps) {
 
   const currentMonthData = chartData[chartData.length - 1];
   const prevMonthData = chartData[chartData.length - 2];
+
+  const currentMonthDate = new Date();
+  const currentMonthTransactions = transactions.filter(t => {
+    const td = new Date(t.date);
+    return td.getMonth() === currentMonthDate.getMonth() && td.getFullYear() === currentMonthDate.getFullYear();
+  });
+
+  const categorySpend = currentMonthTransactions
+    .filter(t => t.type === "despesa")
+    .reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const pieData = Object.entries(categorySpend).map(([id, value]) => ({ id, name: categoryLabels[id] ?? id, value }));
 
   const incomeGrowth = prevMonthData.receitas > 0
     ? ((currentMonthData.receitas - prevMonthData.receitas) / prevMonthData.receitas) * 100
@@ -92,6 +129,41 @@ export function Reports({ transactions }: ReportsProps) {
             <div className="text-xs text-muted-foreground mt-0.5">{card.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Pie chart */}
+      <div className="bg-card rounded-2xl border border-border p-5 mb-5">
+        <h2 className="font-semibold text-foreground mb-4">Despesas por Categoria</h2>
+        {pieData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={3}
+                dataKey="value"
+                nameKey="name"
+                stroke="var(--card)"
+                strokeWidth={2}
+              >
+                {pieData.map(entry => (
+                  <Cell key={entry.id} fill={categoryColors[entry.id] || "#94a3b8"} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: number) => formatBRL(value)} />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[260px] flex items-center justify-center text-center">
+            <div>
+              <div className="text-3xl mb-2">📊</div>
+              <p className="text-sm text-muted-foreground">Adicione despesas deste mês para visualizar o gráfico.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bar chart */}

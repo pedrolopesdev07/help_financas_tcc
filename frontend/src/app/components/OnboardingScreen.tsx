@@ -11,6 +11,9 @@ export interface OnboardingData {
   goal: string;
   profile: string;
   strategy: string;
+  email?: string;
+  password?: string;
+  photoUrl?: string;
 }
 
 const incomeRanges = [
@@ -43,6 +46,20 @@ const strategies = [
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>({ name: "", income: "", goal: "", profile: "", strategy: "" });
+  const [showCustomIncomeInput, setShowCustomIncomeInput] = useState(false);
+  const [customIncome, setCustomIncome] = useState("");
+  const [incomeError, setIncomeError] = useState("");
+
+  const isValidIncomeInput = (value: string) => {
+    const normalized = value
+      .trim()
+      .replace(/\s/g, "")
+      .replace(/R\$/gi, "")
+      .replace(/\./g, "")
+      .replace(/,/g, ".");
+    const numberValue = Number(normalized);
+    return Number.isFinite(numberValue) && numberValue >= 0;
+  };
 
   const totalSteps = 4;
   const progress = (step / totalSteps) * 100;
@@ -53,7 +70,8 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   };
 
   const canNext = () => {
-    if (step === 1) return data.name.trim() && data.income;
+    const isCustomIncome = data.income && !incomeRanges.includes(data.income);
+    if (step === 1) return data.name.trim() && data.income && (!showCustomIncomeInput || isValidIncomeInput(data.income) || isCustomIncome);
     if (step === 2) return !!data.goal;
     if (step === 3) return !!data.profile;
     if (step === 4) return !!data.strategy;
@@ -111,12 +129,50 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                   {incomeRanges.map(range => (
                     <button
                       key={range}
-                      onClick={() => setData({ ...data, income: range })}
-                      className={`py-3 px-4 rounded-xl border text-sm font-medium text-left transition-all min-h-[44px] ${data.income === range ? "border-primary bg-primary/5 text-primary" : "border-border bg-card text-foreground hover:border-primary/40"}`}
+                      onClick={() => {
+                        setData({ ...data, income: range });
+                        setShowCustomIncomeInput(false);
+                        setCustomIncome("");
+                        setIncomeError("");
+                      }}
+                      className={`py-3 px-4 rounded-xl border text-sm font-medium text-left transition-all min-h-[44px] ${data.income === range && !showCustomIncomeInput ? "border-primary bg-primary/5 text-primary" : "border-border bg-card text-foreground hover:border-primary/40"}`}
                     >
                       {range}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextState = !showCustomIncomeInput;
+                      setShowCustomIncomeInput(nextState);
+                      setData({ ...data, income: nextState ? customIncome || data.income || "" : "" });
+                      if (!nextState) {
+                        setCustomIncome("");
+                      }
+                      setIncomeError("");
+                    }}
+                    className={`py-3 px-4 rounded-xl border text-sm font-medium text-left transition-all min-h-[44px] ${showCustomIncomeInput ? "border-primary bg-primary/5 text-primary" : "border-border bg-card text-foreground hover:border-primary/40"}`}
+                  >
+                    {showCustomIncomeInput ? "Usar faixa de renda" : "Outra renda"}
+                  </button>
+                  {(showCustomIncomeInput || (!!data.income && !incomeRanges.includes(data.income))) && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        maxLength={12}
+                        value={customIncome}
+                        onChange={e => {
+                          setCustomIncome(e.target.value);
+                          setData({ ...data, income: e.target.value });
+                          if (incomeError) setIncomeError("");
+                        }}
+                        placeholder="Ex: R$ 4.500,00 ou 4500"
+                        className="w-full rounded-2xl border border-border bg-input-background px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <p className="text-xs text-muted-foreground">Máx. 12 caracteres. Apenas números, ponto ou vírgula.</p>
+                      {incomeError && <p className="text-xs text-destructive">{incomeError}</p>}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -224,7 +280,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           <button
             onClick={next}
             disabled={!canNext()}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all min-h-[44px] ${canNext() ? "bg-primary text-white hover:bg-primary/90 active:scale-[0.98]" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all min-h-[44px] ${canNext() ? "bg-primary text-white hover:bg-primary/90 active:scale-[0.98]" : "bg-muted text-muted-foreground cursor-not-allowed dark:bg-slate-800 dark:text-slate-400"}`}
           >
             {step === totalSteps ? "Começar agora! 🚀" : "Continuar"}
             {step < totalSteps && <ChevronRight size={16} />}

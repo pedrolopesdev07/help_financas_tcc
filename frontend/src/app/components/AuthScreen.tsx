@@ -40,9 +40,9 @@ export function AuthScreen({ onSubmit }: AuthScreenProps) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
       {/* Left panel */}
-      <div className="hidden md:flex flex-col justify-between bg-primary text-primary-foreground p-10 w-[420px] shrink-0">
+      <div className="hidden md:flex flex-col justify-between bg-primary text-primary-foreground p-10 w-[420px] shrink-0 dark:bg-slate-950 dark:text-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-white/20 dark:bg-white/10 flex items-center justify-center">
             <TrendingUp size={22} className="text-white" />
           </div>
           <span className="text-xl font-bold">Help Finanças</span>
@@ -51,16 +51,16 @@ export function AuthScreen({ onSubmit }: AuthScreenProps) {
           <h2 className="text-3xl font-bold leading-tight mb-4">
             Cuide do seu dinheiro com clareza e confiança
           </h2>
-          <p className="text-white/70 text-sm leading-relaxed">
+          <p className="text-white/70 dark:text-slate-300 text-sm leading-relaxed">
             Registre, planeje e conquiste suas metas financeiras com uma ferramenta feita para todos — sem jargões, sem complicação.
           </p>
           <div className="mt-8 space-y-3">
             {["✅ Controle de receitas e despesas", "🎯 Metas personalizadas", "📚 Educação financeira integrada", "🏆 Conquistas e gamificação"].map((item) => (
-              <div key={item} className="text-sm text-white/80">{item}</div>
+              <div key={item} className="text-sm text-white/80 dark:text-slate-200">{item}</div>
             ))}
           </div>
         </div>
-        <p className="text-white/40 text-xs">© 2026 Help Finanças. Todos os direitos reservados.</p>
+        <p className="text-white/40 dark:text-slate-400 text-xs">© 2026 Help Finanças. Todos os direitos reservados.</p>
       </div>
 
       {/* Right panel */}

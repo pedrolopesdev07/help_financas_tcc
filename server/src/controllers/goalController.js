@@ -1,6 +1,8 @@
 import prisma from '../models/prismaClient.js';
 import { parsePositiveNumber } from '../utils/format.js';
 
+const MAX_GOAL_VALUE = 99999999.99;
+
 function computeStatus(valor_atual, valor_total, status) {
   if (Number(valor_atual) >= Number(valor_total)) {
     return 'concluida';
@@ -23,6 +25,17 @@ export async function createGoal(req, res) {
 
   const total = parsePositiveNumber(valor_total);
   const atual = valor_atual !== undefined ? Number(valor_atual) : 0;
+  const deadline = new Date(data_limite);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (total > MAX_GOAL_VALUE) {
+    return res.status(400).json({ error: 'Valor total da meta não pode ultrapassar R$ 99.999.999,99.' });
+  }
+
+  if (deadline < today) {
+    return res.status(400).json({ error: 'A data limite precisa ser futura.' });
+  }
 
   const meta = await prisma.metas.create({
     data: {
@@ -31,7 +44,7 @@ export async function createGoal(req, res) {
       tipo_meta,
       valor_total: total,
       valor_atual: atual,
-      data_limite: new Date(data_limite),
+      data_limite: deadline,
       status: computeStatus(atual, total, 'ativa')
     }
   });
@@ -51,9 +64,29 @@ export async function updateGoal(req, res) {
   const updates = {};
   if (nome) updates.nome = nome;
   if (tipo_meta) updates.tipo_meta = tipo_meta;
-  if (valor_total !== undefined) updates.valor_total = parsePositiveNumber(valor_total);
-  if (valor_atual !== undefined) updates.valor_atual = Number(valor_atual);
-  if (data_limite) updates.data_limite = new Date(data_limite);
+  if (valor_total !== undefined) {
+    const total = parsePositiveNumber(valor_total);
+    if (total > MAX_GOAL_VALUE) {
+      return res.status(400).json({ error: 'Valor total da meta não pode ultrapassar R$ 99.999.999,99.' });
+    }
+    updates.valor_total = total;
+  }
+  if (valor_atual !== undefined) {
+    const atual = Number(valor_atual);
+    if (atual < 0) {
+      return res.status(400).json({ error: 'Valor atual não pode ser negativo.' });
+    }
+    updates.valor_atual = atual;
+  }
+  if (data_limite) {
+    const deadline = new Date(data_limite);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (deadline < today) {
+      return res.status(400).json({ error: 'A data limite precisa ser futura.' });
+    }
+    updates.data_limite = deadline;
+  }
   if (status) updates.status = status;
 
   const updatedMeta = await prisma.metas.update({ where: { id }, data: updates });

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { TrendingUp, TrendingDown, Wallet, Plus, Bell, AlertTriangle, Lightbulb, Coffee, ShoppingBag, Car, Home, Zap, Smartphone, UtensilsCrossed, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { TrendingUp, TrendingDown, Wallet, Plus, Bell, AlertTriangle, Lightbulb, Coffee, ShoppingBag, Car, Home, Zap, Smartphone, UtensilsCrossed, ArrowUpCircle, ArrowDownCircle, Moon, Sun, Settings } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { formatBRL } from "./ui/formatters";
 import type { OnboardingData } from "./OnboardingScreen";
@@ -10,6 +10,8 @@ interface DashboardProps {
   transactions: Transaction[];
   onNewTransaction: () => void;
   onNavigate: (page: string) => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 }
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -51,7 +53,7 @@ function getHealthStatus(balance: number, income: number): { label: string; colo
   return { label: "Crítico 🔴", color: "text-red-700", bg: "bg-red-100" };
 }
 
-export function Dashboard({ userData, transactions, onNewTransaction, onNavigate }: DashboardProps) {
+export function Dashboard({ userData, transactions, onNewTransaction, onNavigate, theme, onToggleTheme }: DashboardProps) {
   const currentMonth = new Date().toLocaleString("pt-BR", { month: "long", year: "numeric" });
 
   const now = new Date();
@@ -64,7 +66,17 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
   const totalExpenses = monthTransactions.filter(t => t.type === "despesa").reduce((s, t) => s + t.amount, 0);
   const balance = totalIncome - totalExpenses;
 
-  // 50-30-20 calculations
+  const parseIncomeValue = (income: string) => {
+    const normalized = income
+      .trim()
+      .replace(/\s/g, "")
+      .replace(/R\$/gi, "")
+      .replace(/\./g, "")
+      .replace(/,/g, ".");
+    const numberValue = Number(normalized);
+    return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : 0;
+  };
+
   const incomeValue = (() => {
     const map: Record<string, number> = {
       "Até R$ 1.500": 1500,
@@ -73,8 +85,11 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
       "R$ 6.000 a R$ 12.000": 9000,
       "Acima de R$ 12.000": 15000,
     };
-    return map[userData.income] || 3000;
+    if (userData.income && map[userData.income]) return map[userData.income];
+    return parseIncomeValue(userData.income) || 3000;
   })();
+
+  const incomeLabel = userData.income && incomeValue > 0 ? formatBRL(incomeValue) : "R$ 0,00";
 
   const essential = incomeValue * 0.5;
   const desire = incomeValue * 0.3;
@@ -133,6 +148,72 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
     },
   };
   const strategy = strategyConfig[userData.strategy] ?? strategyConfig["50-30-20"];
+  const strategyTotal = incomeValue;
+  const [customLimits, setCustomLimits] = useState<Record<string, number>>({});
+  const [customizingStrategy, setCustomizingStrategy] = useState(false);
+
+  const strategyItemWeight = (item: { pct: string }) => Number(item.pct.replace("%", "")) || 0;
+
+  const resetCustomLimits = () => {
+    const counts: Record<string, number> = {};
+    strategy.items.forEach(item => {
+      counts[item.label] = item.limit;
+    });
+    setCustomLimits(counts);
+  };
+
+  useEffect(() => {
+    resetCustomLimits();
+    setCustomizingStrategy(false);
+  }, [strategy.title]);
+
+  const handleLimitChange = (label: string, value: number) => {
+    const inputValue = Number.isNaN(value) ? 0 : value;
+    const clampedValue = Math.max(0, Math.min(inputValue, strategyTotal));
+    const totalRemaining = Math.max(strategyTotal - clampedValue, 0);
+    const otherItems = strategy.items.filter(item => item.label !== label);
+    const otherWeightSum = otherItems.reduce((sum, item) => sum + strategyItemWeight(item), 0);
+
+    const updatedLimits: Record<string, number> = {};
+    let assignedSum = 0;
+
+    strategy.items.forEach(item => {
+      if (item.label === label) {
+        updatedLimits[item.label] = Number(clampedValue.toFixed(2));
+      } else {
+        const weight = strategyItemWeight(item);
+        const itemValue = otherWeightSum > 0
+          ? Number(((weight / otherWeightSum) * totalRemaining).toFixed(2))
+          : 0;
+        updatedLimits[item.label] = itemValue;
+        assignedSum += itemValue;
+      }
+    });
+
+    if (otherItems.length > 0) {
+      const lastLabel = otherItems[otherItems.length - 1].label;
+      const difference = Number((strategyTotal - clampedValue - assignedSum).toFixed(2));
+      updatedLimits[lastLabel] = Number((updatedLimits[lastLabel] + difference).toFixed(2));
+    }
+
+    setCustomLimits(updatedLimits);
+  };
+
+  const handleConfirmCustomization = () => {
+    setCustomizingStrategy(false);
+  };
+
+  const toggleCustomization = () => {
+    if (customizingStrategy) {
+      resetCustomLimits();
+    }
+    setCustomizingStrategy(prev => !prev);
+  };
+
+  const getLimitValue = (label: string, defaultValue: number) => {
+    return customLimits[label] ?? defaultValue;
+  };
+
   const health = getHealthStatus(balance, incomeValue);
   const recent = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
 
@@ -157,6 +238,17 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
           <h1 className="text-xl font-bold text-foreground capitalize">{currentMonth}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={onToggleTheme} className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" title="Alternar modo claro/escuro">
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate("settings")}
+            className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors md:hidden"
+            title="Configurações"
+          >
+            <Settings size={18} />
+          </button>
           <button className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
             <Bell size={18} />
           </button>
@@ -167,14 +259,14 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
       </div>
 
       {/* Balance cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className={`sm:col-span-1 rounded-2xl p-5 ${balanceBg} border ${balance >= 0 ? "border-emerald-200" : "border-red-200"}`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <div className={`rounded-2xl p-5 ${balanceBg} border ${balance >= 0 ? "border-emerald-200" : "border-red-200"}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-foreground font-medium">Saldo Atual</span>
+            <span className="text-sm text-slate-950 font-medium">Saldo Atual</span>
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${health.bg} ${health.color}`}>{health.label}</span>
           </div>
           <div className={`text-2xl font-bold mb-1 ${balanceColor}`}>{formatBRL(balance)}</div>
-          <div className="text-xs text-muted-foreground">Receitas − Despesas do mês</div>
+          <div className="text-xs text-slate-950">Receitas − Despesas do mês</div>
         </div>
 
         <div className="bg-card rounded-2xl p-5 border border-border">
@@ -198,33 +290,52 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
           <div className="text-xl font-bold text-red-500">{formatBRL(totalExpenses)}</div>
           <div className="text-xs text-muted-foreground mt-1">Mês atual</div>
         </div>
+
+        <div className="bg-card rounded-2xl p-5 border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Wallet size={16} className="text-blue-600" />
+            </div>
+            <span className="text-sm text-muted-foreground font-medium">Minha Renda</span>
+          </div>
+          <div className="text-xl font-bold text-foreground">{incomeLabel}</div>
+          <div className="text-xs text-muted-foreground mt-1">Valor usado nos cálculos</div>
+        </div>
       </div>
 
       {/* 50-30-20 Strategy */}
       <div className="bg-card rounded-2xl p-5 border border-border mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-4">
           <div>
             <h3 className="font-semibold text-foreground">{strategy.title}</h3>
             <p className="text-xs text-muted-foreground">{strategy.subtitle} {formatBRL(incomeValue)}</p>
           </div>
+          <button
+            type="button"
+            onClick={toggleCustomization}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            {customizingStrategy ? "Cancelar personalização" : "Personalizar valores"}
+          </button>
         </div>
 
         <div className="space-y-4">
           {strategy.items.map(item => {
-            const barPct = getBarWidth(item.spent, item.limit);
-            const barColor = getBarColor(item.spent, item.limit);
-            const isOver = item.limit > 0 && item.spent >= item.limit;
-            const isNear = item.limit > 0 && item.spent / item.limit >= 0.8 && !isOver;
+            const currentLimit = getLimitValue(item.label, item.limit);
+            const barPct = getBarWidth(item.spent, currentLimit);
+            const barColor = getBarColor(item.spent, currentLimit);
+            const isOver = currentLimit > 0 && item.spent >= currentLimit;
+            const isNear = currentLimit > 0 && item.spent / currentLimit >= 0.8 && !isOver;
             return (
               <div key={item.label}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between mb-1.5 gap-4">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-foreground">{item.label}</span>
                     <span className="text-xs text-muted-foreground">{item.pct}</span>
                     {isOver && <span className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full"><AlertTriangle size={10} /> Excedeu</span>}
                     {isNear && <span className="flex items-center gap-1 text-xs text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded-full"><AlertTriangle size={10} /> 80%+</span>}
                   </div>
-                  <span className="text-xs text-muted-foreground">{formatBRL(item.spent)} / {formatBRL(item.limit)}</span>
+                  <span className="text-xs text-muted-foreground">{formatBRL(item.spent)} / {formatBRL(currentLimit)}</span>
                 </div>
                 <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${barPct}%` }} />
@@ -233,6 +344,43 @@ export function Dashboard({ userData, transactions, onNewTransaction, onNavigate
             );
           })}
         </div>
+
+        {customizingStrategy && (
+          <div className="mt-6 rounded-2xl border border-border bg-background p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Valores personalizados</p>
+                <p className="text-xs text-muted-foreground">Ao alterar um valor, os demais se ajustam proporcionalmente para manter o total da estratégia.</p>
+              </div>
+              <span className="text-xs text-muted-foreground">Total: {formatBRL(strategyTotal)}</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {strategy.items.map(item => (
+                <label key={item.label} className="text-sm text-foreground">
+                  <span className="block mb-2 font-medium">{item.label}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={strategyTotal}
+                    value={getLimitValue(item.label, item.limit)}
+                    onChange={e => handleLimitChange(item.label, Number(e.target.value))}
+                    className="w-full rounded-xl border border-border bg-input-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleConfirmCustomization}
+                className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-all"
+              >
+                Confirmar alterações
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

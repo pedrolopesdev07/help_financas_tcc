@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { Plus, Target, X, Calendar, Wallet, Check, ChevronRight, Star, Shield } from "lucide-react";
 import { formatBRL } from "./ui/formatters";
 import type { Transaction } from "./Transactions";
@@ -38,6 +38,8 @@ const colors = [
   { label: "Rosa", value: "bg-pink-500" },
 ];
 
+const MAX_GOAL_VALUE = 99999999.99;
+
 const defaultForm = () => ({
   name: "",
   emoji: "🎯",
@@ -47,12 +49,18 @@ const defaultForm = () => ({
   color: "bg-primary",
 });
 
+
+const parseValue = (value: string) => {
+  const normalized = value.replace(/,/g, ".").trim();
+  return Number(normalized || 0);
+};
+
 export function Goals({ goals, onAddGoal, onUpdateGoal, onDeleteGoal, transactions }: GoalsProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultForm());
   const [depositGoal, setDepositGoal] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
-  const [activeStrategy, setActiveStrategy] = useState<"50-30-20" | "zero" | "80-20">("50-30-20");
+  const [formErrors, setFormErrors] = useState<{ target?: string; deadline?: string; name?: string }>({});
 
   const totalExpenses = transactions
     .filter(t => t.type === "despesa")
@@ -61,19 +69,50 @@ export function Goals({ goals, onAddGoal, onUpdateGoal, onDeleteGoal, transactio
 
   const hasEmergency = goals.some(g => g.name.toLowerCase().includes("reserva") || g.name.toLowerCase().includes("emergência"));
 
-  const handleAdd = (e: React.FormEvent) => {
+  const validateForm = () => {
+    const errors: typeof formErrors = {};
+    if (!form.name.trim()) {
+      errors.name = "Dê um nome para sua meta.";
+    }
+
+    const targetValue = parseValue(form.target);
+    if (!form.target || Number.isNaN(targetValue) || targetValue <= 0) {
+      errors.target = "Informe um valor alvo válido.";
+    } else if (targetValue > MAX_GOAL_VALUE) {
+      errors.target = "Valor muito alto. Use até R$ 99.999.999,99.";
+    }
+
+    if (!form.deadline) {
+      errors.deadline = "Defina uma data de prazo.";
+    } else {
+      const deadlineDate = new Date(form.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (deadlineDate < today) {
+        errors.deadline = "⚠️ Opa! Essa data já passou. Tente selecionar uma data futura.";
+      }
+    }
+
+    setFormErrors(errors);
+    return errors;
+  };
+
+  const handleAdd = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!form.name || !form.target) return;
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) return;
+
     onAddGoal({
       id: crypto.randomUUID(),
       name: form.name,
       emoji: form.emoji,
-      target: parseFloat(form.target),
-      current: parseFloat(form.current || "0"),
+      target: parseValue(form.target),
+      current: parseValue(form.current || "0"),
       deadline: form.deadline,
       color: form.color,
     });
     setForm(defaultForm());
+    setFormErrors({});
     setShowForm(false);
   };
 
@@ -91,63 +130,6 @@ export function Goals({ goals, onAddGoal, onUpdateGoal, onDeleteGoal, transactio
     const diff = new Date(deadline).getTime() - Date.now();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   };
-
-  const strategies = [
-    {
-      id: "50-30-20" as const,
-      label: "Regra 50-30-20",
-      icon: "📊",
-      description: "50% Essenciais · 30% Desejos · 20% Prioridades",
-      active: activeStrategy === "50-30-20",
-      visual: (
-        <div className="flex h-4 rounded-full overflow-hidden mt-3 gap-0.5">
-          <div className="bg-primary flex items-center justify-center" style={{ width: "50%" }}>
-            <span className="text-[8px] text-white font-bold">50%</span>
-          </div>
-          <div className="bg-accent flex items-center justify-center" style={{ width: "30%" }}>
-            <span className="text-[8px] text-white font-bold">30%</span>
-          </div>
-          <div className="bg-blue-400 flex items-center justify-center" style={{ width: "20%" }}>
-            <span className="text-[8px] text-white font-bold">20%</span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "zero" as const,
-      label: "Orçamento Base Zero",
-      icon: "🎯",
-      description: "Cada centavo tem um destino específico",
-      active: activeStrategy === "zero",
-      visual: (
-        <div className="flex gap-1.5 mt-3">
-          {["Aluguel", "Comida", "Lazer", "Meta"].map((env, i) => (
-            <div key={env} className={`flex-1 rounded-lg p-1.5 border text-center ${i < 3 ? "border-muted bg-muted/50" : "border-primary/30 bg-primary/5"}`}>
-              <div className="text-[8px] font-medium text-muted-foreground">{env}</div>
-              <div className="text-[8px] text-muted-foreground">{i < 3 ? "✓" : "→"}</div>
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      id: "80-20" as const,
-      label: "Regra 80/20",
-      icon: "⚡",
-      description: "Poupe 20% primeiro, gaste os 80% restantes",
-      active: activeStrategy === "80-20",
-      visual: (
-        <div className="flex h-4 rounded-full overflow-hidden mt-3 gap-0.5">
-          <div className="bg-muted flex items-center justify-center" style={{ width: "80%" }}>
-            <span className="text-[8px] text-muted-foreground font-bold">80% Livre</span>
-          </div>
-          <div className="bg-primary flex items-center justify-center" style={{ width: "20%" }}>
-            <span className="text-[8px] text-white font-bold">20%</span>
-          </div>
-        </div>
-      ),
-    },
-  ];
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -195,113 +177,125 @@ export function Goals({ goals, onAddGoal, onUpdateGoal, onDeleteGoal, transactio
       )}
 
       {/* Goals grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-8">
         {goals.length === 0 ? (
-          <div className="sm:col-span-2 bg-card rounded-2xl border border-border p-10 text-center">
-            <Target size={32} className="text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium text-foreground">Nenhuma meta criada ainda</p>
-            <p className="text-xs text-muted-foreground mt-1">Defina seus objetivos financeiros e acompanhe o progresso.</p>
+          <div className="bg-card rounded-3xl border border-border p-6 md:p-8 shadow-[0_20px_80px_rgba(15,23,42,0.04)]">
+            <div className="space-y-6">
+              <div className="max-w-2xl">
+                <p className="text-sm uppercase tracking-[0.3em] text-primary/90 font-semibold">Metas e Estratégias</p>
+                <h2 className="text-3xl font-bold text-foreground mt-3">Ainda não há metas criadas</h2>
+                <p className="text-sm text-muted-foreground mt-3">Defina seu primeiro objetivo financeiro e comece a transformar seus planos em resultados reais.</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[1.75rem] border border-border bg-muted/50 p-5">
+                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Meta recomendada</p>
+                  <h3 className="mt-3 text-lg font-semibold text-foreground">Reserva de Emergência</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">A base de uma estratégia segura é ter 6 meses de despesas guardadas.</p>
+                </div>
+                <div className="rounded-[1.75rem] border border-border bg-muted/50 p-5">
+                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Inspire-se</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-background px-3 py-2 text-xs font-semibold text-foreground">Carro de Luxo</span>
+                    <span className="rounded-full bg-background px-3 py-2 text-xs font-semibold text-foreground">Casa de Luxo</span>
+                    <span className="rounded-full bg-background px-3 py-2 text-xs font-semibold text-foreground">Viagem em Dubai</span>
+                    <span className="rounded-full bg-background px-3 py-2 text-xs font-semibold text-foreground">Reserva Financeira</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-border bg-background p-6 text-center">
+                <p className="text-sm font-semibold text-foreground">Sem metas ainda?</p>
+                <p className="text-xs text-muted-foreground mt-2">Clique em “Nova Meta” e transforme um objetivo em um plano financeiro.</p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Pronto para começar?</p>
+                  <p className="text-xs text-muted-foreground mt-1">Defina seu primeiro objetivo financeiro agora mesmo.</p>
+                </div>
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/15 hover:bg-primary/90 transition-all"
+                >
+                  Nova Meta
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
-          goals.map(goal => {
-            const pct = Math.min((goal.current / goal.target) * 100, 100);
-            const daysLeft = getDaysLeft(goal.deadline);
-            const completed = pct >= 100;
-            return (
-              <div key={goal.id} className={`bg-card rounded-2xl border p-5 transition-all ${completed ? "border-green-200" : "border-border"}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{goal.emoji}</span>
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">{goal.name}</p>
-                      {daysLeft !== null && (
-                        <p className={`text-xs ${daysLeft < 30 ? "text-orange-500" : "text-muted-foreground"}`}>
-                          {daysLeft > 0 ? `${daysLeft} dias restantes` : "Prazo encerrado"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {completed && <Star size={14} className="text-yellow-500 fill-yellow-500" />}
-                    <button onClick={() => onDeleteGoal(goal.id)} className="w-6 h-6 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-all">
-                      <X size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-muted-foreground">Progresso</span>
-                    <span className="font-semibold text-foreground">{Math.round(pct)}%</span>
-                  </div>
-                  <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-700 ${completed ? "bg-green-500" : goal.color || "bg-primary"}`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs text-muted-foreground">
-                    <span className="font-bold text-foreground text-sm">{formatBRL(goal.current)}</span> / {formatBRL(goal.target)}
-                  </div>
-                  <span className="text-xs text-muted-foreground">Falta {formatBRL(Math.max(0, goal.target - goal.current))}</span>
-                </div>
-
-                {!completed && (
-                  depositGoal === goal.id ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="R$ valor"
-                        value={depositAmount}
-                        onChange={e => setDepositAmount(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl bg-input-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                      <button onClick={() => handleDeposit(goal.id)} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-medium hover:bg-primary/90 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center">
-                        <Check size={14} />
-                      </button>
-                      <button onClick={() => setDepositGoal(null)} className="px-3 py-2 bg-muted text-muted-foreground rounded-xl text-xs hover:bg-muted/80 transition-all min-h-[44px] flex items-center justify-center">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setDepositGoal(goal.id)} className="w-full py-2.5 rounded-xl border border-primary/30 text-primary text-xs font-medium hover:bg-primary/5 transition-all min-h-[44px]">
-                      + Depositar
-                    </button>
-                  )
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Strategy section */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-4">Estratégias de Orçamento</h2>
-        <div className="space-y-3">
-          {strategies.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setActiveStrategy(s.id)}
-              className={`w-full p-4 rounded-2xl border text-left transition-all ${s.active ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{s.icon}</span>
-                  <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {goals.map(goal => {
+              const pct = Math.min((goal.current / goal.target) * 100, 100);
+              const daysLeft = getDaysLeft(goal.deadline);
+              const completed = pct >= 100;
+              return (
+                <div key={goal.id} className={`bg-card rounded-2xl border p-5 transition-all ${completed ? "border-green-200" : "border-border"}`}>
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className={`font-semibold text-sm ${s.active ? "text-primary" : "text-foreground"}`}>{s.label}</span>
-                      {s.active && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full">Ativa</span>}
+                      <span className="text-2xl">{goal.emoji}</span>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm">{goal.name}</p>
+                        {daysLeft !== null && (
+                          <p className={`text-xs ${daysLeft < 30 ? "text-orange-500" : "text-muted-foreground"}`}>
+                            {daysLeft > 0 ? `${daysLeft} dias restantes` : "Prazo encerrado"}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
+                    <div className="flex gap-1">
+                      {completed && <Star size={14} className="text-yellow-500 fill-yellow-500" />}
+                      <button onClick={() => onDeleteGoal(goal.id)} className="w-6 h-6 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-all">
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
+
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-muted-foreground">Progresso</span>
+                      <span className="font-semibold text-foreground">{Math.round(pct)}%</span>
+                    </div>
+                    <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${completed ? "bg-green-500" : goal.color || "bg-primary"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-bold text-foreground text-sm">{formatBRL(goal.current)}</span> / {formatBRL(goal.target)}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Falta {formatBRL(Math.max(0, goal.target - goal.current))}</span>
+                  </div>
+
+                  {!completed && (
+                    depositGoal === goal.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="R$ valor"
+                          value={depositAmount}
+                          onChange={e => setDepositAmount(e.target.value)}
+                          className="flex-1 px-3 py-2 rounded-xl bg-input-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                        <button onClick={() => handleDeposit(goal.id)} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-medium hover:bg-primary/90 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center">
+                          <Check size={14} />
+                        </button>
+                        <button onClick={() => setDepositGoal(null)} className="px-3 py-2 bg-muted text-muted-foreground rounded-xl text-xs hover:bg-muted/80 transition-all min-h-[44px] flex items-center justify-center">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDepositGoal(goal.id)} className="w-full py-2.5 rounded-xl border border-primary/30 text-primary text-xs font-medium hover:bg-primary/5 transition-all min-h-[44px]">
+                        + Depositar
+                      </button>
+                    )
+                  )}
                 </div>
-                {s.active && <Check size={16} className="text-primary shrink-0" />}
-              </div>
-              {s.visual}
-            </button>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Add Goal Modal */}
